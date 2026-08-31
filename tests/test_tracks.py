@@ -12,6 +12,9 @@ from heatmap.tracks import (
     coarsen,
     heat_points,
     load_rides,
+    pass_bucket,
+    pass_histogram,
+    points_from_counts,
     read_session_db,
     read_track,
     ride_cells,
@@ -276,6 +279,49 @@ class TestHeatPoints:
     def test_empty_input_produces_no_points(self):
         assert heat_points([], BASE_LEVEL) == []
         assert heat_points([frozenset()], BASE_LEVEL) == []
+
+
+class TestPassBuckets:
+    def test_boundaries_are_disjoint_and_complete(self):
+        assert [pass_bucket(n) for n in (1, 2, 5, 6, 100)] == [
+            "1 day",
+            "2-5 days",
+            "2-5 days",
+            "6+ days",
+            "6+ days",
+        ]
+
+    def test_histogram_always_lists_every_bucket(self):
+        histogram = pass_histogram({(0, 0): 1})
+
+        assert [label for label, _ in histogram] == ["1 day", "2-5 days", "6+ days"]
+        assert dict(histogram)["1 day"] == 1
+        assert dict(histogram)["6+ days"] == 0
+
+    def test_filtering_keeps_only_the_wanted_bands(self):
+        counts = {(0, 0): 1, (1, 0): 3, (2, 0): 9}
+
+        once = points_from_counts(counts, BASE_LEVEL, ["1 day"])
+        often = points_from_counts(counts, BASE_LEVEL, ["6+ days"])
+        both = points_from_counts(counts, BASE_LEVEL, ["1 day", "6+ days"])
+
+        assert len(once) == len(often) == 1
+        assert len(both) == 2
+
+    def test_colours_do_not_shift_when_bands_are_hidden(self):
+        counts = {(0, 0): 1, (1, 0): 9}
+
+        unfiltered = {p.lat: p.weight for p in points_from_counts(counts, BASE_LEVEL)}
+        filtered = points_from_counts(counts, BASE_LEVEL, ["1 day"])
+
+        # The rare cell keeps the weight it had while the busy one was still on the map.
+        assert filtered[0].weight == pytest.approx(unfiltered[filtered[0].lat])
+        assert filtered[0].weight < 1.0
+
+    def test_no_selection_keeps_everything(self):
+        counts = {(0, 0): 1, (1, 0): 3, (2, 0): 9}
+
+        assert len(points_from_counts(counts, BASE_LEVEL)) == 3
 
 
 class TestRideMetadata:

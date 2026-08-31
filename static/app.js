@@ -100,8 +100,23 @@ function renderHeat() {
 const FILTERS = {
   bike: { param: 'bike', facet: 'bikes', selected: new Set() },
   cat: { param: 'cat', facet: 'categories', selected: new Set() },
-  year: { param: 'year', facet: 'years', selected: new Set() }
+  year: { param: 'year', facet: 'years', selected: new Set() },
+  pass: { param: 'pass', facet: 'passes', selected: new Set() }
 };
+
+// Disjoint bands of "days ridden"; must match PASS_BUCKETS in heatmap/tracks.py.
+const PASS_BUCKETS = [
+  ['1 day', 1, 1],
+  ['2-5 days', 2, 5],
+  ['6+ days', 6, Infinity]
+];
+
+function passBucket(count) {
+  for (const [label, low, high] of PASS_BUCKETS) {
+    if (count >= low && count <= high) return label;
+  }
+  return PASS_BUCKETS[PASS_BUCKETS.length - 1][0];
+}
 
 function gridLevel() {
   // Cells track the zoom level so slow, twisty stretches collapse into one cell
@@ -152,17 +167,153 @@ function renderFilters(facets) {
   }
 }
 
+// A static export ships the rides as one file and aggregates them here instead
+// of calling the API, so the page can be hosted without a server.
+const STATIC_DATA = window.STATIC_DATA || null;
+const MIN_LEVEL = 6;
+const Y_RANGE = 2 ** 21;
+let dataset = null;
+
+async function loadDataset() {
+  const meta = await (await fetch(`${STATIC_DATA}rides.json`)).json();
+  const bytes = new Uint8Array(await (await fetch(`${STATIC_DATA}rides.bin`)).arrayBuffer());
+
+  let cursor = 0;
+  const readVarint = () => {
+    let result = 0;
+    let shift = 0;
+    let byte;
+    do {
+      byte = bytes[cursor++];
+      result += (byte & 127) * 2 ** shift;
+      shift += 7;
+    } while (byte & 128);
+    return result;
+  };
+  const unzigzag = (v) => (v % 2 ? -(v + 1) / 2 : v / 2);
+
+  const rides = meta.rides.map(([dayIndex, bikeIndex, catIndex, count]) => {
+    const xs = new Int32Array(count);
+    const ys = new Int32Array(count);
+    let x = 0;
+    let y = 0;
+    for (let i = 0; i < count; i++) {
+      x += unzigzag(readVarint());
+      y += unzigzag(readVarint());
+      xs[i] = x;
+      ys[i] = y;
+    }
+    const day = meta.days[dayIndex];
+    return {
+      day,
+      bike: meta.bikes[bikeIndex],
+      category: meta.categories[catIndex],
+      year: day.startsWith('file:') ? 'Unknown' : day.slice(0, 4),
+      xs,
+      ys
+    };
+  });
+
+  dataset = { meta, rides };
+}
+
+function tally(values) {
+  const counts = new Map();
+  for (const value of values) counts.set(value, (counts.get(value) || 0) + 1);
+  return [...counts].sort((a, b) => (a[0] < b[0] ? -1 : 1));
+}
+
+function staticHeatmap() {
+  const level = Math.max(MIN_LEVEL, Math.min(gridLevel(), dataset.meta.baseLevel));
+  const shift = dataset.meta.baseLevel - level;
+
+  const counts = new Map();
+  const seenPerDay = new Map();
+  let selected = 0;
+
+  for (const ride of dataset.rides) {
+    if (FILTERS.bike.selected.size && !FILTERS.bike.selected.has(ride.bike)) continue;
+    if (FILTERS.cat.selected.size && !FILTERS.cat.selected.has(ride.category)) continue;
+    if (FILTERS.year.selected.size && !FILTERS.year.selected.has(ride.year)) continue;
+    selected++;
+
+    let seen = seenPerDay.get(ride.day);
+    if (!seen) {
+      seen = new Set();
+      seenPerDay.set(ride.day, seen);
+    }
+    for (let i = 0; i < ride.xs.length; i++) {
+      const key = (ride.xs[i] >> shift) * Y_RANGE + (ride.ys[i] >> shift);
+      if (seen.has(key)) continue; // one day never counts twice
+      seen.add(key);
+      counts.set(key, (counts.get(key) || 0) + 1);
+    }
+  }
+
+  const scale = 2 ** level;
+  // Spreading the counts into Math.max overflows the stack once there are many cells.
+  let busiest = 0;
+  for (const count of counts.values()) if (count > busiest) busiest = count;
+  const top = Math.log1p(busiest);
+
+  const wanted = FILTERS.pass.selected;
+  const histogram = new Map(PASS_BUCKETS.map(([label]) => [label, 0]));
+  const points = [];
+  let south = 90;
+  let west = 180;
+  let north = -90;
+  let east = -180;
+
+  for (const [key, count] of counts) {
+    const bucket = passBucket(count);
+    histogram.set(bucket, histogram.get(bucket) + 1);
+    if (wanted.size && !wanted.has(bucket)) continue;
+
+    const x = Math.floor(key / Y_RANGE);
+    const y = key - x * Y_RANGE;
+    const lon = ((x + 0.5) / scale) * 360 - 180;
+    const lat = (Math.atan(Math.sinh(Math.PI * (1 - (2 * (y + 0.5)) / scale))) * 180) / Math.PI;
+    points.push([lat, lon, Math.log1p(count) / top]);
+    if (lat < south) south = lat;
+    if (lat > north) north = lat;
+    if (lon < west) west = lon;
+    if (lon > east) east = lon;
+  }
+
+  return {
+    points,
+    bounds: points.length ? [[south, west], [north, east]] : null,
+    rides: selected,
+    days: seenPerDay.size,
+    totalRides: dataset.rides.length,
+    failed: [],
+    facets: {
+      bikes: tally(dataset.rides.map((r) => r.bike)),
+      categories: tally(dataset.rides.map((r) => r.category)),
+      years: tally(dataset.rides.map((r) => r.year)).reverse(),
+      passes: [...histogram]
+    }
+  };
+}
+
 let pendingRequest = 0;
 
 async function loadHeatmap(fit = false) {
   const token = ++pendingRequest;
   el('stats').textContent = 'Loading rides…';
-  const response = await fetch(`/api/heatmap?${filterQuery()}`);
-  if (!response.ok) {
-    el('stats').textContent = 'Failed to load rides.';
-    return;
+
+  let data;
+  if (STATIC_DATA) {
+    if (!dataset) await loadDataset();
+    data = staticHeatmap();
+  } else {
+    const response = await fetch(`/api/heatmap?${filterQuery()}`);
+    if (!response.ok) {
+      el('stats').textContent = 'Failed to load rides.';
+      return;
+    }
+    data = await response.json();
   }
-  const data = await response.json();
   if (token !== pendingRequest) return; // a newer request already won
 
   points = data.points;
@@ -209,8 +360,6 @@ function applyBasemapTheme(dark) {
 el('dark').addEventListener('change', (event) => applyBasemapTheme(event.target.checked));
 applyBasemapTheme(el('dark').checked);
 
-el('reload').addEventListener('click', () => loadHeatmap(true));
-
 el('clear-filters').addEventListener('click', () => {
   for (const filter of Object.values(FILTERS)) filter.selected.clear();
   loadHeatmap(true);
@@ -233,7 +382,11 @@ async function uploadTo(endpoint, input) {
   await loadHeatmap(true);
 }
 
-el('upload-tracks').addEventListener('change', (event) => uploadTo('/api/tracks', event.target));
-el('upload-db').addEventListener('change', (event) => uploadTo('/api/databases', event.target));
+// The static export has no server behind it, so these controls are not rendered.
+if (!STATIC_DATA) {
+  el('reload').addEventListener('click', () => loadHeatmap(true));
+  el('upload-tracks').addEventListener('change', (event) => uploadTo('/api/tracks', event.target));
+  el('upload-db').addEventListener('change', (event) => uploadTo('/api/databases', event.target));
+}
 
 loadHeatmap(true);

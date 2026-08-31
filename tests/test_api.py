@@ -167,6 +167,32 @@ class TestHeatmapEndpoint:
 
         assert len(coarse["points"]) < len(fine["points"])
 
+    def test_filters_by_how_many_days_a_cell_was_ridden(self, client, db_dir):
+        # One day covers the whole road, a second day only its first half.
+        seed_database(
+            db_dir,
+            [
+                session(1, START, ROAD),
+                session(2, START.replace(day=2), ROAD[:4]),
+            ],
+        )
+
+        everything = heatmap(client, level=BASE_LEVEL)
+        once = heatmap(client, level=BASE_LEVEL, **{"pass": "1 day"})
+        twice = heatmap(client, level=BASE_LEVEL, **{"pass": "2-5 days"})
+
+        assert len(once["points"]) + len(twice["points"]) == len(everything["points"])
+        assert {round(w, 3) for _, _, w in once["points"]} != {1.0}
+        assert {round(w, 3) for _, _, w in twice["points"]} == {1.0}
+
+    def test_pass_facet_lists_all_bands(self, client, db_dir):
+        seed_database(db_dir, [session(1, START, ROAD)])
+
+        facets = heatmap(client)["facets"]
+
+        assert [label for label, _ in facets["passes"]] == ["1 day", "2-5 days", "6+ days"]
+        assert dict(facets["passes"])["6+ days"] == 0
+
     def test_out_of_range_and_invalid_levels_are_handled(self, client, db_dir):
         seed_database(db_dir, [session(1, START, ROAD)])
 

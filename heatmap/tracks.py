@@ -29,6 +29,12 @@ SEGMENT_GAP_SECONDS = 600
 UNKNOWN = "Unknown"
 # The database stores activity categories as plain integers; rename them here if you like.
 CATEGORY_LABELS: dict[int, str] = {}
+# Disjoint bands of "days ridden", used to filter the map by how well travelled a cell is.
+PASS_BUCKETS: tuple[tuple[str, int, int | None], ...] = (
+    ("1 day", 1, 1),
+    ("2-5 days", 2, 5),
+    ("6+ days", 6, None),
+)
 
 
 @dataclass(frozen=True)
@@ -295,24 +301,76 @@ def coarsen(cells: frozenset[tuple[int, int]], level: int) -> set[tuple[int, int
     return {(x >> shift, y >> shift) for x, y in cells}
 
 
+def cells_within(lat: float, lon: float, radius_m: float) -> set[tuple[int, int]]:
+    """Every base-level cell whose centre lies within `radius_m` of a point."""
+    scale = 1 << BASE_LEVEL
+    lat_margin = radius_m / 111_320.0
+    lon_margin = lat_margin / max(math.cos(math.radians(lat)), 1e-6)
+
+    corners = [
+        _mercator(lat - lat_margin, lon - lon_margin),
+        _mercator(lat + lat_margin, lon + lon_margin),
+    ]
+    xs = sorted(int(x * scale) for x, _ in corners)
+    ys = sorted(int(y * scale) for _, y in corners)
+
+    blocked = set()
+    for x in range(xs[0], xs[1] + 1):
+        for y in range(ys[0], ys[1] + 1):
+            centre_lat, centre_lon = _inverse_mercator((x + 0.5) / scale, (y + 0.5) / scale)
+            if _haversine(lat, lon, centre_lat, centre_lon) <= radius_m:
+                blocked.add((x, y))
+    return blocked
+
+
 def clamp_level(level: int) -> int:
     return max(MIN_LEVEL, min(int(level), BASE_LEVEL))
 
 
-def heat_points(day_cells, level: int) -> list[HeatPoint]:
-    """Weight each grid cell by the number of distinct days it was ridden, normalised to 0..1."""
+def cell_counts(day_cells) -> dict[tuple[int, int], int]:
+    """How many distinct days each grid cell was ridden."""
     counts: dict[tuple[int, int], int] = {}
     for cells in day_cells:
         for cell in cells:
             counts[cell] = counts.get(cell, 0) + 1
+    return counts
+
+
+def pass_bucket(count: int) -> str:
+    for label, low, high in PASS_BUCKETS:
+        if count >= low and (high is None or count <= high):
+            return label
+    return PASS_BUCKETS[-1][0]
+
+
+def pass_histogram(counts: dict[tuple[int, int], int]) -> list[list]:
+    """Cells per bucket, always listing every bucket so the filter stays stable."""
+    tally = {label: 0 for label, _, _ in PASS_BUCKETS}
+    for count in counts.values():
+        tally[pass_bucket(count)] += 1
+    return [[label, tally[label]] for label, _, _ in PASS_BUCKETS]
+
+
+def points_from_counts(
+    counts: dict[tuple[int, int], int], level: int, passes=()
+) -> list[HeatPoint]:
+    """Turn day counts into weighted points, optionally keeping only some buckets."""
     if not counts:
         return []
 
     scale = 1 << clamp_level(level)
-    # Log scaling keeps a single day visible while still highlighting favourites.
+    # Normalise against every cell, so hiding buckets does not recolour the rest.
     top = math.log1p(max(counts.values()))
+    wanted = set(passes)
     result: list[HeatPoint] = []
     for (x, y), count in counts.items():
+        if wanted and pass_bucket(count) not in wanted:
+            continue
         lat, lon = _inverse_mercator((x + 0.5) / scale, (y + 0.5) / scale)
         result.append(HeatPoint(lat, lon, math.log1p(count) / top))
     return result
+
+
+def heat_points(day_cells, level: int, passes=()) -> list[HeatPoint]:
+    """Weight each grid cell by the number of distinct days it was ridden, normalised to 0..1."""
+    return points_from_counts(cell_counts(day_cells), level, passes)

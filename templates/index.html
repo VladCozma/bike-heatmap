@@ -43,9 +43,16 @@
       <summary>Year <span class="badge" id="year-badge">all</span></summary>
       <div class="options" id="year-options"></div>
     </details>
+    <details>
+      <summary>Days ridden <span class="badge" id="pass-badge">all</span></summary>
+      <div class="options" id="pass-options"></div>
+    </details>
     <button id="clear-filters" type="button" class="link-button">Clear filters</button>
   </div>
 
+  {% if static_export %}
+  <p class="hint">Static export of {{ ride_count }} rides, generated {{ generated }}.</p>
+  {% else %}
   <div class="actions">
     <label class="file-button">
       Load GPX / TCX tracks
@@ -59,12 +66,14 @@
   </div>
 
   <p class="hint">Tracks live in <code>tracks/</code>, databases in <code>databases/</code>.</p>
+  {% endif %}
   <div class="legend">
     <span>1 day</span><div class="legend-bar"></div><span>many days</span>
   </div>
 </aside>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+{% if static_export %}<script>window.STATIC_DATA = 'data/';</script>{% endif %}
 <script src="{{ url_for('static', filename='app.js') }}"></script>
 </body>
 </html>

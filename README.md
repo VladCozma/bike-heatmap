@@ -77,6 +77,87 @@ The database stores categories as bare integers with no labels, so they appear a
 CATEGORY_LABELS = {0: "Training", 1: "Tour", 2: "MTB"}
 ```
 
+## Publishing as a static site
+
+```sh
+.venv/bin/python export_static.py
+```
+
+This writes a self-contained `dist/` folder that needs no server — upload it to
+GitHub Pages, Cloudflare Pages, Netlify or any static host. Asset paths are
+relative, so it also works from a sub-path such as `user.github.io/bike-heatmap/`.
+
+All the rides ship as one delta-encoded binary (about 650 KB gzipped for 228
+rides), and the browser does the day grouping and filtering itself. Zooming and
+every filter still work exactly as they do against the server; only the upload
+buttons are gone, so rerun the export after adding rides.
+
+Preview it locally with:
+
+```sh
+python3 -m http.server 8081 --directory dist
+```
+
+### Hiding your home
+
+Pass `--hide` to cut a circle out of the exported data. The cells are removed
+before anything is written, so the hidden area is not merely invisible — it is
+absent from the published files.
+
+```sh
+.venv/bin/python export_static.py --hide 52.39655,4.64584,300
+```
+
+The radius is in metres and defaults to 300 if you leave it off. Repeat the flag
+for more zones, for example your workplace. Rides that fall entirely inside a
+zone drop out of the export completely.
+
+To find the coordinate to hide, look for the cell you have ridden on the most
+days — that is almost always home:
+
+```sh
+.venv/bin/python -c "
+from pathlib import Path
+from collections import Counter
+from heatmap.tracks import load_rides, ride_cells, coarsen, _inverse_mercator
+rides, _, _ = load_rides(Path('tracks'), Path('databases'))
+level, days = 17, {}
+for r in rides:
+    days.setdefault(r.day, set()).update(coarsen(ride_cells(r), level))
+counts = Counter()
+for cells in days.values():
+    counts.update(cells)
+for (x, y), n in counts.most_common(3):
+    lat, lon = _inverse_mercator((x + 0.5) / (1 << level), (y + 0.5) / (1 << level))
+    print(f'{n} days  {lat:.5f},{lon:.5f}')
+"
+```
+
+### Deploying to GitHub Pages
+
+`dist/` is gitignored, so publish it to a `gh-pages` branch that holds nothing but
+the built site. Set the branch up once:
+
+```sh
+git worktree add ../bike-heatmap-pages --orphan gh-pages
+```
+
+Then repeat this whenever you add rides:
+
+```sh
+.venv/bin/python export_static.py
+rsync -a --delete dist/ ../bike-heatmap-pages/
+cd ../bike-heatmap-pages && git add -A && git commit -m "publish" && git push -u origin gh-pages
+```
+
+Finally, in the repository settings under **Pages**, set the source to the
+`gh-pages` branch and the `/ (root)` folder. The site appears at
+`https://<user>.github.io/<repo>/`.
+
+> A free GitHub Pages site is public — Pages on a private repository needs a paid
+> plan. Use `--hide` (above) before publishing if you would rather not advertise
+> where you live.
+
 ## Tests
 
 ```sh

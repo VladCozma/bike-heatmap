@@ -15,10 +15,12 @@ from heatmap.tracks import (
     DB_SUFFIXES,
     DEFAULT_LEVEL,
     FILE_SUFFIXES,
+    cell_counts,
     clamp_level,
     coarsen,
-    heat_points,
     load_rides,
+    pass_histogram,
+    points_from_counts,
     ride_cells,
 )
 
@@ -92,6 +94,7 @@ def api_heatmap():
     bikes = set(request.args.getlist("bike"))
     categories = set(request.args.getlist("cat"))
     years = set(request.args.getlist("year"))
+    passes = set(request.args.getlist("pass"))
 
     signature = _signature()
     cache_key = (
@@ -100,6 +103,7 @@ def api_heatmap():
         tuple(sorted(bikes)),
         tuple(sorted(categories)),
         tuple(sorted(years)),
+        tuple(sorted(passes)),
     )
     payload = _response_cache.get(cache_key)
     if payload is None:
@@ -117,7 +121,8 @@ def api_heatmap():
                 selected += 1
                 by_day.setdefault(ride.day, set()).update(coarsen(cells[index], level))
 
-        points = heat_points(by_day.values(), level)
+        counts = cell_counts(by_day.values())
+        points = points_from_counts(counts, level, passes)
         bounds = None
         if points:
             lats = [p.lat for p in points]
@@ -136,7 +141,7 @@ def api_heatmap():
                     "totalRides": len(rides),
                     "duplicates": duplicates,
                     "failed": failed,
-                    "facets": _facets(rides),
+                    "facets": _facets(rides) | {"passes": pass_histogram(counts)},
                 }
             ).encode(),
             5,
