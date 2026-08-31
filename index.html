@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bike Ride Heatmap</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link rel="stylesheet" href="static/style.css">
+</head>
+<body>
+<div id="map"></div>
+
+<aside id="panel">
+  <h1>Bike Heatmap</h1>
+  <p class="stats" id="stats">Loading…</p>
+
+  <label>Segment width <span class="value" id="radius-value">7</span> px
+    <input type="range" id="radius" min="2" max="30" value="7">
+  </label>
+
+  <label>Fuzziness <span class="value" id="blur-value">5</span> px
+    <input type="range" id="blur" min="0" max="30" value="5">
+  </label>
+
+  <label>Cell size <span class="value" id="cell-value">8</span> px
+    <input type="range" id="cell" min="4" max="24" step="1" value="8">
+  </label>
+
+  <label class="checkbox">
+    <input type="checkbox" id="dark" checked> Dark basemap
+  </label>
+
+  <div class="filters">
+    <details open>
+      <summary>Bike <span class="badge" id="bike-badge">all</span></summary>
+      <div class="options" id="bike-options"></div>
+    </details>
+    <details>
+      <summary>Category <span class="badge" id="cat-badge">all</span></summary>
+      <div class="options" id="cat-options"></div>
+    </details>
+    <details>
+      <summary>Year <span class="badge" id="year-badge">all</span></summary>
+      <div class="options" id="year-options"></div>
+    </details>
+    <button id="clear-filters" type="button" class="link-button">Clear filters</button>
+  </div>
+
+  
+  <p class="hint">Static export of 227 rides, generated 2026-08-31.</p>
+  
+  <div class="legend">
+    <span>1 day</span><div class="legend-bar"></div><span>many days</span>
+  </div>
+</aside>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>window.STATIC_DATA = 'data/';</script>
+<script src="static/app.js"></script>
+</body>
+</html>
