@@ -50,6 +50,11 @@ the database copy wins because it carries more metadata.
 - **Bike / Category / Year** — tick values to narrow the map. Ticks within one
   group are combined with OR, and the three groups are combined with AND. The
   number next to each value is how many rides carry it.
+- **Days ridden** — keep only cells you rode on 1 day, 2–5 days or 6+ days. Use
+  it to separate one-off detours from the routes you take regularly. The bands
+  are disjoint, so their counts add up to the total, and hiding a band does not
+  recolour what is left — the colour scale is always normalised against every
+  cell.
 
 The grid follows the zoom level, so zooming in re-fetches finer cells. Detail
 stops increasing past roughly zoom 16, which is the finest grid that gets

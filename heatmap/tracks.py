@@ -49,7 +49,8 @@ class Ride:
     segments: list[list[tuple[float, float]]] = field(repr=False)
     start_ms: int | None = None
     bike: str = UNKNOWN
-    category: str = UNKNOWN
+    # category not well exported by bikecomputer
+    # category: str = UNKNOWN
     source: str = ""
     # Time of the first GPS fix; a session's stored start time can differ from its export.
     first_fix_ms: int | None = None
@@ -175,7 +176,7 @@ def read_session_db(path: Path):
                 segments=list(segments),
                 start_ms=starttime or first_time,
                 bike=bike or UNKNOWN,
-                category=category_label(cat),
+                # category=category_label(cat),
                 source=path.name,
                 first_fix_ms=first_time,
             )

@@ -311,12 +311,13 @@ class TestPassBuckets:
     def test_colours_do_not_shift_when_bands_are_hidden(self):
         counts = {(0, 0): 1, (1, 0): 9}
 
-        unfiltered = {p.lat: p.weight for p in points_from_counts(counts, BASE_LEVEL)}
-        filtered = points_from_counts(counts, BASE_LEVEL, ["1 day"])
+        all_weights = {p.weight for p in points_from_counts(counts, BASE_LEVEL)}
+        rare_only = points_from_counts(counts, BASE_LEVEL, ["1 day"])
 
-        # The rare cell keeps the weight it had while the busy one was still on the map.
-        assert filtered[0].weight == pytest.approx(unfiltered[filtered[0].lat])
-        assert filtered[0].weight < 1.0
+        # Normalisation is against the full range, so rare cells stay dim even
+        # when the busy ones are hidden.
+        assert rare_only[0].weight < 1.0
+        assert rare_only[0].weight in all_weights
 
     def test_no_selection_keeps_everything(self):
         counts = {(0, 0): 1, (1, 0): 3, (2, 0): 9}

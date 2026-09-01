@@ -99,7 +99,7 @@ function renderHeat() {
 
 const FILTERS = {
   bike: { param: 'bike', facet: 'bikes', selected: new Set() },
-  cat: { param: 'cat', facet: 'categories', selected: new Set() },
+//   cat: { param: 'cat', facet: 'categories', selected: new Set() },
   year: { param: 'year', facet: 'years', selected: new Set() },
   pass: { param: 'pass', facet: 'passes', selected: new Set() }
 };
@@ -192,7 +192,7 @@ async function loadDataset() {
   };
   const unzigzag = (v) => (v % 2 ? -(v + 1) / 2 : v / 2);
 
-  const rides = meta.rides.map(([dayIndex, bikeIndex, catIndex, count]) => {
+  const rides = meta.rides.map(([dayIndex, bikeIndex, /* catIndex, */ count]) => {
     const xs = new Int32Array(count);
     const ys = new Int32Array(count);
     let x = 0;
@@ -207,7 +207,7 @@ async function loadDataset() {
     return {
       day,
       bike: meta.bikes[bikeIndex],
-      category: meta.categories[catIndex],
+    //   category: meta.categories[catIndex],
       year: day.startsWith('file:') ? 'Unknown' : day.slice(0, 4),
       xs,
       ys
@@ -233,7 +233,7 @@ function staticHeatmap() {
 
   for (const ride of dataset.rides) {
     if (FILTERS.bike.selected.size && !FILTERS.bike.selected.has(ride.bike)) continue;
-    if (FILTERS.cat.selected.size && !FILTERS.cat.selected.has(ride.category)) continue;
+    // if (FILTERS.cat.selected.size && !FILTERS.cat.selected.has(ride.category)) continue;
     if (FILTERS.year.selected.size && !FILTERS.year.selected.has(ride.year)) continue;
     selected++;
 
@@ -289,7 +289,7 @@ function staticHeatmap() {
     failed: [],
     facets: {
       bikes: tally(dataset.rides.map((r) => r.bike)),
-      categories: tally(dataset.rides.map((r) => r.category)),
+    //   categories: tally(dataset.rides.map((r) => r.category)),
       years: tally(dataset.rides.map((r) => r.year)).reverse(),
       passes: [...histogram]
     }

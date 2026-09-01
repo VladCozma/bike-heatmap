@@ -74,7 +74,7 @@ def _cells(signature: tuple, rides):
 def _facets(rides) -> dict:
     return {
         "bikes": sorted(Counter(r.bike for r in rides).items()),
-        "categories": sorted(Counter(r.category for r in rides).items()),
+        # "categories": sorted(Counter(r.category for r in rides).items()),
         "years": sorted(Counter(r.year for r in rides).items(), reverse=True),
     }
 
