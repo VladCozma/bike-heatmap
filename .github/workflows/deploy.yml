@@ -1,0 +1,50 @@
+name: Rebuild GitHub Pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'tracks/**'
+      - 'databases/**'
+      - 'heatmap/**'
+      - 'static/**'
+      - 'templates/**'
+      - 'app.py'
+      - 'export_static.py'
+      - 'requirements.txt'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Build static export
+        run: |
+          python export_static.py --dest dist ${HIDE_ZONES:+$(printf -- '--hide %s ' $HIDE_ZONES)}
+        env:
+          # Add privacy zones here (optional, space-separated):
+          # HIDE_ZONES: "52.39655,4.64584,300 52.50,4.70,200"
+          HIDE_ZONES: ""
+
+      - name: Deploy to gh-pages
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./dist
