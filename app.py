@@ -92,7 +92,6 @@ def api_heatmap():
         level = DEFAULT_LEVEL
 
     bikes = set(request.args.getlist("bike"))
-    categories = set(request.args.getlist("cat"))
     years = set(request.args.getlist("year"))
     passes = set(request.args.getlist("pass"))
 
@@ -101,7 +100,6 @@ def api_heatmap():
         signature,
         level,
         tuple(sorted(bikes)),
-        tuple(sorted(categories)),
         tuple(sorted(years)),
         tuple(sorted(passes)),
     )
@@ -115,7 +113,6 @@ def api_heatmap():
         for index, ride in enumerate(rides):
             if (
                 (not bikes or ride.bike in bikes)
-                and (not categories or ride.category in categories)
                 and (not years or ride.year in years)
             ):
                 selected += 1

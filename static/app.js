@@ -192,7 +192,7 @@ async function loadDataset() {
   };
   const unzigzag = (v) => (v % 2 ? -(v + 1) / 2 : v / 2);
 
-  const rides = meta.rides.map(([dayIndex, bikeIndex, /* catIndex, */ count]) => {
+  const rides = meta.rides.map(([dayIndex, bikeIndex, count]) => {
     const xs = new Int32Array(count);
     const ys = new Int32Array(count);
     let x = 0;
@@ -207,7 +207,6 @@ async function loadDataset() {
     return {
       day,
       bike: meta.bikes[bikeIndex],
-    //   category: meta.categories[catIndex],
       year: day.startsWith('file:') ? 'Unknown' : day.slice(0, 4),
       xs,
       ys
@@ -233,7 +232,6 @@ function staticHeatmap() {
 
   for (const ride of dataset.rides) {
     if (FILTERS.bike.selected.size && !FILTERS.bike.selected.has(ride.bike)) continue;
-    // if (FILTERS.cat.selected.size && !FILTERS.cat.selected.has(ride.category)) continue;
     if (FILTERS.year.selected.size && !FILTERS.year.selected.has(ride.year)) continue;
     selected++;
 
@@ -251,13 +249,17 @@ function staticHeatmap() {
   }
 
   const scale = 2 ** level;
-  // Spreading the counts into Math.max overflows the stack once there are many cells.
-  let busiest = 0;
-  for (const count of counts.values()) if (count > busiest) busiest = count;
-  const top = Math.log1p(busiest);
-
   const wanted = FILTERS.pass.selected;
   const histogram = new Map(PASS_BUCKETS.map(([label]) => [label, 0]));
+
+  // Spreading the counts into Math.max overflows the stack once there are many cells.
+  let busiest = 0;
+  for (const count of counts.values()) {
+    histogram.set(passBucket(count), histogram.get(passBucket(count)) + 1);
+    if (count > busiest) busiest = count;
+  }
+  const top = Math.log1p(busiest);
+
   const points = [];
   let south = 90;
   let west = 180;
@@ -266,7 +268,6 @@ function staticHeatmap() {
 
   for (const [key, count] of counts) {
     const bucket = passBucket(count);
-    histogram.set(bucket, histogram.get(bucket) + 1);
     if (wanted.size && !wanted.has(bucket)) continue;
 
     const x = Math.floor(key / Y_RANGE);
@@ -289,7 +290,6 @@ function staticHeatmap() {
     failed: [],
     facets: {
       bikes: tally(dataset.rides.map((r) => r.bike)),
-    //   categories: tally(dataset.rides.map((r) => r.category)),
       years: tally(dataset.rides.map((r) => r.year)).reverse(),
       passes: [...histogram]
     }

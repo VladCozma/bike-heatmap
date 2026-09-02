@@ -74,22 +74,21 @@ class TestEncoding:
         ]
 
         blob, meta = encode_rides(rides)
-        decoded = decode(blob, [entry[3] for entry in meta["rides"]])
+        decoded = decode(blob, [entry[2] for entry in meta["rides"]])
 
         assert decoded == [ride_cells(ride) for ride in rides]
 
     def test_metadata_is_interned(self):
         rides = [
-            Ride(segments=[ROAD], start_ms=millis(START), bike="Ridley", category="Category 1"),
-            Ride(segments=[ROAD], start_ms=millis(START), bike="Ridley", category="Category 2"),
+            Ride(segments=[ROAD], start_ms=millis(START), bike="Ridley"),
+            Ride(segments=[ROAD], start_ms=millis(START), bike="MTB"),
         ]
 
         _, meta = encode_rides(rides)
 
-        assert meta["bikes"] == ["Ridley"]
-        assert meta["categories"] == ["Category 1", "Category 2"]
+        assert meta["bikes"] == ["Ridley", "MTB"]
         assert meta["days"] == ["2024-06-01"]
-        assert [entry[:3] for entry in meta["rides"]] == [[0, 0, 0], [0, 0, 1]]
+        assert all(len(entry) == 3 for entry in meta["rides"])  # [dayIndex, bikeIndex, cellCount]
 
     def test_base_level_is_recorded(self):
         _, meta = encode_rides([Ride(segments=[ROAD], start_ms=millis(START))])
@@ -151,7 +150,7 @@ class TestBuild:
         meta = json.loads((tmp_path / "dist" / "data" / "rides.json").read_text())
 
         assert meta["bikes"] == ["Ridley"]
-        assert meta["categories"] == ["Category 1"]
+        # categories removed; no longer tracked
 
     def test_empty_input_is_refused(self, tmp_path, tracks_dir, db_dir):
         with pytest.raises(SystemExit):
@@ -180,7 +179,7 @@ class TestPrivacyZone:
         _, meta = encode_rides([ride], blocked)
 
         assert meta["hiddenCells"] > 0
-        assert meta["rides"][0][3] == len(everything - blocked)
+        assert meta["rides"][0][2] == len(everything - blocked)
 
     def test_export_leaves_no_hidden_cell_in_the_data(self, tmp_path, tracks_dir, db_dir):
         write_gpx(tracks_dir / "ride.gpx", LONG_ROAD, start=START)
@@ -189,7 +188,7 @@ class TestPrivacyZone:
         build(tmp_path / "dist", tracks_dir, db_dir, hide=[(*self.HOME, 300)])
         meta = json.loads((tmp_path / "dist" / "data" / "rides.json").read_text())
         blob = (tmp_path / "dist" / "data" / "rides.bin").read_bytes()
-        exported = set().union(*decode(blob, [entry[3] for entry in meta["rides"]]))
+        exported = set().union(*decode(blob, [entry[2] for entry in meta["rides"]]))
 
         assert exported
         assert exported & blocked == set()

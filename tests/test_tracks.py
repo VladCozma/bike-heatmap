@@ -92,7 +92,6 @@ class TestSessionDatabase:
         assert len(rides) == 1
         ride = rides[0]
         assert ride.bike == "Ridley"
-        assert ride.category == "Category 2"
         assert ride.year == "2024"
         assert ride.day == "2024-03-02"
         assert ride.segments[0][0] == pytest.approx(HOME)
@@ -142,7 +141,6 @@ class TestSessionDatabase:
         ride = next(iter(read_session_db(path)))
 
         assert ride.bike == UNKNOWN
-        assert ride.category == UNKNOWN
 
     def test_rejects_database_without_expected_tables(self, db_dir):
         path = db_dir / "other.db"

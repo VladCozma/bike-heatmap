@@ -28,7 +28,6 @@ def encode_rides(rides: list[Ride], blocked: set[tuple[int, int]] = frozenset())
     left out entirely, so private areas never reach the export.
     """
     bikes: dict[str, int] = {}
-    categories: dict[str, int] = {}
     days: dict[str, int] = {}
 
     def intern(table: dict[str, int], value: str) -> int:
@@ -56,7 +55,6 @@ def encode_rides(rides: list[Ride], blocked: set[tuple[int, int]] = frozenset())
             [
                 intern(days, ride.day),
                 intern(bikes, ride.bike),
-                intern(categories, ride.category),
                 len(cells),
             ]
         )
@@ -67,7 +65,6 @@ def encode_rides(rides: list[Ride], blocked: set[tuple[int, int]] = frozenset())
         "hiddenCells": hidden,
         "days": list(days),
         "bikes": list(bikes),
-        "categories": list(categories),
         "rides": index,
     }
     return bytes(blob), meta

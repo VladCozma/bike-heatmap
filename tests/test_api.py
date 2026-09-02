@@ -113,7 +113,6 @@ class TestHeatmapEndpoint:
         facets = heatmap(client)["facets"]
 
         assert dict(facets["bikes"]) == {"Ridley": 1, "MTB": 1}
-        assert dict(facets["categories"]) == {"Category 1": 1, "Category 2": 1}
         assert dict(facets["years"]) == {"2024": 1, "2023": 1}
 
     def test_filters_by_bike(self, client, db_dir):
@@ -142,7 +141,7 @@ class TestHeatmapEndpoint:
         )
 
         assert heatmap(client, bike="Ridley", year="2024")["rides"] == 1
-        assert heatmap(client, bike="Ridley", year="2023", cat="Category 1")["rides"] == 0
+        assert heatmap(client, bike="Ridley", year="2023")["rides"] == 1
 
     def test_selecting_several_values_in_one_group_widens_the_result(self, client, db_dir):
         seed_database(
